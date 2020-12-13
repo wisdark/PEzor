@@ -6,13 +6,16 @@ INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $INSTALL_DIR &&
 
 apt update &&
-apt install -y wget unzip build-essential cmake autotools-dev git clang golang mingw-w64 libcapstone-dev libssl-dev cowsay &&
+apt install -y wget unzip build-essential cmake autotools-dev git clang golang mingw-w64 libcapstone-dev libssl-dev cowsay mono-devel &&
 
 mkdir -p deps &&
 cd deps &&
 
 (ls inline_syscall 2>/dev/null 1>&2 || (
-    git clone --depth 1 https://github.com/JustasMasiulis/inline_syscall.git &&
+    git clone https://github.com/JustasMasiulis/inline_syscall.git &&
+    cd inline_syscall &&
+    git checkout 24238544b510d8f85ca38de3a43bc41fa8cfe380 &&
+    cd .. &&
     grep -v '#include <intrin.h>' $INSTALL_DIR/deps/inline_syscall/include/in_memory_init.hpp > $INSTALL_DIR/deps/inline_syscall/include/in_memory_init.hpp2 &&
     mv $INSTALL_DIR/deps/inline_syscall/include/in_memory_init.hpp2 $INSTALL_DIR/deps/inline_syscall/include/in_memory_init.hpp)
 ) &&
@@ -26,7 +29,7 @@ cd keystone &&
 mkdir -p build &&
 cd build &&
 cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD="X86" -G "Unix Makefiles" .. &&
-make -j &&
+make &&
 make install &&
 cd ../..)
 ) &&
